@@ -805,52 +805,44 @@ function drawMobileJoystick(ctx) {
         return;
     }
 
-    // Show overlay
+    // Show overlay and ensure it's above everything
     gameState.joystickOverlay.style.display = 'block';
 
-    // Use different positioning strategy for mobile vs desktop
+    // Same positioning logic for both fullscreen and normal modes - relative to touch point
+    const isFullscreen = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement;
+    const zIndex = isFullscreen ? '2147483647' : '9999'; // Maximum z-index in fullscreen
+    gameState.joystickOverlay.style.zIndex = zIndex;
+
     const isMobile = gameState.isMobile || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
-    if (isMobile) {
-        // Mobile: Use fixed center position for reliability
-        // Mobile browsers are picky about absolute positioning with touch events
-        const viewportWidth = window.innerWidth;
-        const viewportHeight = window.innerHeight;
+    // Use same positioning logic for both mobile and desktop: position relative to touch point
+    const screenX = gameState.mobileInput.centerX;
+    const screenY = gameState.mobileInput.centerY;
 
-        // Center the overlay on screen (simple, reliable)
-        const overlayX = (viewportWidth - 200) / 2;
-        const overlayY = (viewportHeight - 200) / 2;
+    // Use viewport-relative positioning for both platforms
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
 
-        gameState.joystickOverlay.style.left = overlayX + 'px';
-        gameState.joystickOverlay.style.top = overlayY + 'px';
-        gameState.joystickOverlay.style.position = 'fixed';
-    } else {
-        // Desktop: Position relative to touch point
-        const screenX = gameState.mobileInput.centerX;
-        const screenY = gameState.mobileInput.centerY;
+    // Position joystick above the touch point with spacing
+    const joystickRadius = gameState.mobileInput.joystickRadius + 10;
+    let overlayX = Math.max(0, Math.min(screenX - 100, viewportWidth - 200)); // Center the 200px wide overlay on touch, clamp to viewport
+    let overlayY = screenY - joystickRadius * 2;
 
-        // Use viewport-relative positioning for better desktop support
-        const viewportWidth = window.innerWidth;
-        const viewportHeight = window.innerHeight;
-
-        // Position joystick above the touch point with spacing
-        const joystickRadius = gameState.mobileInput.joystickRadius + 10;
-        let overlayX = Math.max(0, Math.min(screenX - 100, viewportWidth - 200)); // Center the 200px wide overlay on touch, clamp to viewport
-        let overlayY = screenY - joystickRadius * 2;
-
-        // If too high, position below touch point instead
-        if (overlayY < 10) {
-            overlayY = Math.max(0, screenY + joystickRadius * 2);
-        }
-
-        // Clamp to viewport bounds
-        overlayY = Math.max(0, Math.min(overlayY, viewportHeight - 200)); // 200px is overlay height
-
-        // Set overlay position using screen coordinates but clamped to viewport
-        gameState.joystickOverlay.style.left = overlayX + 'px';
-        gameState.joystickOverlay.style.top = overlayY + 'px';
-        gameState.joystickOverlay.style.position = 'fixed'; // Ensure fixed positioning
+    // If too high, position below touch point instead
+    if (overlayY < 10) {
+        overlayY = Math.max(0, screenY + joystickRadius * 2);
     }
+
+    // Clamp to viewport bounds
+    overlayY = Math.max(0, Math.min(overlayY, viewportHeight - 200)); // 200px is overlay height
+
+    // Set overlay position using screen coordinates but clamped to viewport
+    gameState.joystickOverlay.style.width = '200px';
+    gameState.joystickOverlay.style.height = '200px';
+    gameState.joystickOverlay.style.left = overlayX + 'px';
+    gameState.joystickOverlay.style.top = overlayY + 'px';
+    gameState.joystickOverlay.style.bottom = 'auto';
+    gameState.joystickOverlay.style.position = 'fixed';
 
     // Draw on overlay canvas
     const overlayCtx = gameState.joystickCtx;

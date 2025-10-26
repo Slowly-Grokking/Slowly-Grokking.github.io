@@ -273,10 +273,21 @@ function handleMobileStart(event) {
     const pageY = event.type.startsWith('touch') ?
         event.touches[0].pageY : event.pageY;
 
-    // For mobile, we need to account for viewport offset and scrolling
-    const rect = document.documentElement.getBoundingClientRect();
-    const clientX = pageX - rect.left;
-    const clientY = pageY - rect.top;
+    // Check if we're in fullscreen mode
+    const isFullscreen = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement;
+
+    // For fullscreen mode on mobile, use page coordinates directly (they're already screen-relative)
+    let clientX, clientY;
+    if (isFullscreen) {
+        // In fullscreen mode on mobile, page coordinates are relative to the screen
+        clientX = Math.max(0, pageX);
+        clientY = Math.max(0, pageY);
+    } else {
+        // Normal mode - account for viewport offset and scrolling
+        const rect = document.documentElement.getBoundingClientRect();
+        clientX = Math.max(0, pageX - rect.left);
+        clientY = Math.max(0, pageY - rect.top);
+    }
 
 
 
@@ -318,10 +329,21 @@ function handleMobileMove(event) {
     const pageY = event.type.startsWith('touch') ?
         event.touches[0].pageY : event.pageY;
 
-    // For mobile, we need to account for viewport offset and scrolling
-    const rect = document.documentElement.getBoundingClientRect();
-    const clientX = pageX - rect.left;
-    const clientY = pageY - rect.top;
+    // Check if we're in fullscreen mode
+    const isFullscreen = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement;
+
+    // For fullscreen mode on mobile, use page coordinates directly (they're already screen-relative)
+    let clientX, clientY;
+    if (isFullscreen) {
+        // In fullscreen mode on mobile, page coordinates are relative to the screen
+        clientX = Math.max(0, pageX);
+        clientY = Math.max(0, pageY);
+    } else {
+        // Normal mode - account for viewport offset and scrolling
+        const rect = document.documentElement.getBoundingClientRect();
+        clientX = Math.max(0, pageX - rect.left);
+        clientY = Math.max(0, pageY - rect.top);
+    }
 
     if (gameState.mobileInput.fullScreenMode) {
         // Full-screen mode: use screen coordinates directly
@@ -376,8 +398,14 @@ function handleOrientationChange() {
 // Toggle fullscreen mode
 function toggleFullscreen() {
     if (!document.fullscreenElement) {
-        // Enter fullscreen
+        // Enter fullscreen: Move joystick overlay into game-container first (following video player overlay pattern)
         const gameContainer = document.getElementById('game-container');
+        const joystickOverlay = document.getElementById('joystick-overlay');
+        if (joystickOverlay && gameContainer) {
+            // Move overlay from body to game-container so it appears in fullscreen
+            gameContainer.appendChild(joystickOverlay);
+        }
+
         if (gameContainer.requestFullscreen) {
             gameContainer.requestFullscreen();
         } else if (gameContainer.mozRequestFullScreen) { // Firefox
@@ -404,14 +432,22 @@ function toggleFullscreen() {
 // Update fullscreen button based on current state
 function updateFullscreenButton() {
     const fullscreenBtn = document.getElementById('fullscreen-btn');
-    if (fullscreenBtn) {
-        if (document.fullscreenElement) {
-            fullscreenBtn.textContent = '⛶';
-            document.body.classList.add('fullscreen-input');
-        } else {
-            fullscreenBtn.textContent = '⛶';
-            document.body.classList.remove('fullscreen-input');
+    const joystickOverlay = document.getElementById('joystick-overlay');
+
+    if (document.fullscreenElement) {
+        // ENTERED FULLSCREEN - overlay already moved during toggleFullscreen
+        fullscreenBtn.textContent = '⛶';
+        document.body.classList.add('fullscreen-input');
+    } else {
+        // EXITED FULLSCREEN - move joystick overlay back to body
+        const body = document.body;
+        if (joystickOverlay && body) {
+            // Move overlay back from game-container to body
+            body.appendChild(joystickOverlay);
         }
+
+        fullscreenBtn.textContent = '⛶';
+        document.body.classList.remove('fullscreen-input');
     }
 }
 
