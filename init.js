@@ -9,6 +9,28 @@ function initializeGameState() {
         ctx: null,
         keys: { left: false, right: false },
 
+        // Mobile/touch input state
+        mobileInput: {
+            active: false,        // Is mobile input active
+            startX: 0,           // Touch/mouse start position
+            startY: 0,           // Touch/mouse start position Y
+            currentX: 0,         // Current touch/mouse position
+            currentY: 0,         // Current touch/mouse position Y
+            centerX: 0,          // Joystick center position
+            centerY: 0,          // Joystick center position Y
+            joystickRadius: 60,  // Joystick visual radius
+            deadzone: 10,        // Deadzone for centering
+            maxDistance: 50,     // Maximum joystick travel
+            left: false,         // Current left input state
+            right: false,        // Current right input state
+            targetSpeed: 0,      // Target speed based on drag distance (0-1)
+            fullScreenMode: true // Allow input anywhere on screen
+        },
+
+        // Device orientation detection
+        isLandscape: false,
+        isMobile: false,
+
         // Game mode system
         mode: 'endless', // 'endless', 'speedrun', 'daily', 'practice'
         speedrunTarget: 10, // 10, 25, or 100 levels
@@ -76,6 +98,11 @@ function init() {
 
     gameState.canvas = document.getElementById('game-canvas');
     gameState.ctx = gameState.canvas.getContext('2d');
+
+    // Get joystick overlay references
+    gameState.joystickOverlay = document.getElementById('joystick-overlay');
+    gameState.joystickCanvas = document.getElementById('joystick-canvas');
+    gameState.joystickCtx = gameState.joystickCanvas.getContext('2d');
 
     // Validate game state before loading
     validateGameState(gameState);
@@ -177,7 +204,215 @@ function setupGame() {
     document.addEventListener('keydown', handleInput);
     document.addEventListener('keyup', handleInput);
 
+    // Mobile/touch input event listeners
+    setupMobileInput();
+
+    // Fullscreen button event listener
+    const fullscreenBtn = document.getElementById('fullscreen-btn');
+    if (fullscreenBtn) {
+        fullscreenBtn.addEventListener('click', toggleFullscreen);
+        document.addEventListener('fullscreenchange', updateFullscreenButton);
+        document.addEventListener('mozfullscreenchange', updateFullscreenButton);
+        document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
+        document.addEventListener('msfullscreenchange', updateFullscreenButton);
+    }
+
+    // Menu button event listener for mobile
+    const menuBtn = document.getElementById('menu-btn');
+    if (menuBtn) {
+        menuBtn.addEventListener('click', showMobileMenu);
+    }
+
     console.log('Little Prince Gravity Game initialized successfully!');
+}
+
+// Setup mobile input system
+function setupMobileInput() {
+    // Full-screen input mode: listen to entire document
+    gameState.mobileInput.fullScreenMode = true;
+
+    if (gameState.mobileInput.fullScreenMode) {
+        // Listen to entire document for full-screen input
+        document.addEventListener('touchstart', handleMobileStart, { passive: false });
+        document.addEventListener('touchmove', handleMobileMove, { passive: false });
+        document.addEventListener('touchend', handleMobileEnd, { passive: false });
+
+        // Mouse events for desktop (same behavior as mobile)
+        document.addEventListener('mousedown', handleMobileStart);
+        document.addEventListener('mousemove', handleMobileMove);
+        document.addEventListener('mouseup', handleMobileEnd);
+
+        // Prevent context menu on right click
+        document.addEventListener('contextmenu', (e) => e.preventDefault());
+    } else {
+        // Original canvas-only mode
+        const canvas = document.getElementById('game-canvas');
+        canvas.addEventListener('touchstart', handleMobileStart, { passive: false });
+        canvas.addEventListener('touchmove', handleMobileMove, { passive: false });
+        canvas.addEventListener('touchend', handleMobileEnd, { passive: false });
+        canvas.addEventListener('mousedown', handleMobileStart);
+        canvas.addEventListener('mousemove', handleMobileMove);
+        canvas.addEventListener('mouseup', handleMobileEnd);
+        canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    }
+}
+
+// Mobile input handlers
+function handleMobileStart(event) {
+    if (!gameState.gameStarted || gameState.paused) return;
+
+    // Don't handle events on UI buttons
+    if (event.target.matches('.game-btn') || event.target.closest('.game-btn')) {
+        return;
+    }
+
+    event.preventDefault();
+
+    const pageX = event.type.startsWith('touch') ?
+        event.touches[0].pageX : event.pageX;
+    const pageY = event.type.startsWith('touch') ?
+        event.touches[0].pageY : event.pageY;
+
+    // For mobile, we need to account for viewport offset and scrolling
+    const rect = document.documentElement.getBoundingClientRect();
+    const clientX = pageX - rect.left;
+    const clientY = pageY - rect.top;
+
+
+
+    if (gameState.mobileInput.fullScreenMode) {
+        // Full-screen mode: use screen coordinates directly
+        gameState.mobileInput.startX = clientX;
+        gameState.mobileInput.startY = clientY;
+        gameState.mobileInput.currentX = clientX;
+        gameState.mobileInput.currentY = clientY;
+        gameState.mobileInput.centerX = clientX;
+        gameState.mobileInput.centerY = clientY;
+    } else {
+        // Canvas-relative mode
+        const canvas = gameState.canvas;
+        const rect = canvas.getBoundingClientRect();
+        gameState.mobileInput.startX = clientX - rect.left;
+        gameState.mobileInput.startY = clientY - rect.top;
+        gameState.mobileInput.currentX = clientX - rect.left;
+        gameState.mobileInput.currentY = clientY - rect.top;
+        gameState.mobileInput.centerX = clientX - rect.left;
+        gameState.mobileInput.centerY = clientY - rect.top;
+    }
+
+    gameState.mobileInput.active = true;
+
+    // Prevent default touch behavior
+    if (event.type.startsWith('touch')) {
+        event.preventDefault();
+    }
+}
+
+function handleMobileMove(event) {
+    if (!gameState.mobileInput.active || !gameState.gameStarted || gameState.paused) return;
+
+    event.preventDefault();
+
+    const pageX = event.type.startsWith('touch') ?
+        event.touches[0].pageX : event.pageX;
+    const pageY = event.type.startsWith('touch') ?
+        event.touches[0].pageY : event.pageY;
+
+    // For mobile, we need to account for viewport offset and scrolling
+    const rect = document.documentElement.getBoundingClientRect();
+    const clientX = pageX - rect.left;
+    const clientY = pageY - rect.top;
+
+    if (gameState.mobileInput.fullScreenMode) {
+        // Full-screen mode: use screen coordinates directly
+        gameState.mobileInput.currentX = clientX;
+        gameState.mobileInput.currentY = clientY;
+    } else {
+        // Canvas-relative mode
+        const canvas = gameState.canvas;
+        const rect = canvas.getBoundingClientRect();
+        gameState.mobileInput.currentX = clientX - rect.left;
+        gameState.mobileInput.currentY = clientY - rect.top;
+    }
+
+    // Prevent default touch behavior
+    if (event.type.startsWith('touch')) {
+        event.preventDefault();
+    }
+}
+
+function handleMobileEnd(event) {
+    if (!gameState.mobileInput.active) return;
+
+    event.preventDefault();
+
+    // Jump when releasing (if no keyboard input is active)
+    const hasKeyboardInput = gameState.keys.left || gameState.keys.right;
+    if (!hasKeyboardInput && gameState.player && gameState.player.onPlanet && !gameState.player.hasJumped) {
+        gameState.player.jump();
+        if (gameState.stats) {
+            gameState.stats.totalJumps++;
+        }
+    }
+
+    gameState.mobileInput.active = false;
+
+    // Prevent default touch behavior
+    if (event.type.startsWith('touch')) {
+        event.preventDefault();
+    }
+}
+
+// Handle device orientation changes (no longer automatically entering fullscreen)
+function handleOrientationChange() {
+    const isLandscape = window.matchMedia("(orientation: landscape)").matches;
+    gameState.isLandscape = isLandscape;
+    gameState.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+    // Update UI for orientation changes
+    updateFullscreenButton();
+}
+
+// Toggle fullscreen mode
+function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+        // Enter fullscreen
+        const gameContainer = document.getElementById('game-container');
+        if (gameContainer.requestFullscreen) {
+            gameContainer.requestFullscreen();
+        } else if (gameContainer.mozRequestFullScreen) { // Firefox
+            gameContainer.mozRequestFullScreen();
+        } else if (gameContainer.webkitRequestFullscreen) { // Chrome, Safari and Opera
+            gameContainer.webkitRequestFullscreen();
+        } else if (gameContainer.msRequestFullscreen) { // IE/Edge
+            gameContainer.msRequestFullscreen();
+        }
+    } else {
+        // Exit fullscreen
+        if (document.exitFullscreen) {
+            document.exitFullscreen();
+        } else if (document.mozCancelFullScreen) { // Firefox
+            document.mozCancelFullScreen();
+        } else if (document.webkitExitFullscreen) { // Chrome, Safari and Opera
+            document.webkitExitFullscreen();
+        } else if (document.msExitFullscreen) { // IE/Edge
+            document.msExitFullscreen();
+        }
+    }
+}
+
+// Update fullscreen button based on current state
+function updateFullscreenButton() {
+    const fullscreenBtn = document.getElementById('fullscreen-btn');
+    if (fullscreenBtn) {
+        if (document.fullscreenElement) {
+            fullscreenBtn.textContent = '⛶';
+            document.body.classList.add('fullscreen-input');
+        } else {
+            fullscreenBtn.textContent = '⛶';
+            document.body.classList.remove('fullscreen-input');
+        }
+    }
 }
 
 // Initialize when page loads
@@ -185,4 +420,8 @@ window.onload = function() {
     init();
     // Setup after a short delay to ensure all scripts have loaded
     setTimeout(setupGame, 100);
+
+    // Listen for orientation changes
+    window.addEventListener('orientationchange', handleOrientationChange);
+    handleOrientationChange(); // Initial check
 };

@@ -302,7 +302,16 @@ function update(deltaTime) {
     gameState.player.prevX = gameState.player.x;
     gameState.player.prevY = gameState.player.y;
 
-    gameState.player.updatePhysics(gameState.currentLevel.planets, gameState.keys, deltaTime);
+    // Update mobile input state
+    updateMobileInput();
+
+    // Combine keyboard and mobile input
+    const combinedKeys = {
+        left: gameState.keys.left || gameState.mobileInput.left,
+        right: gameState.keys.right || gameState.mobileInput.right
+    };
+
+    gameState.player.updatePhysics(gameState.currentLevel.planets, combinedKeys, deltaTime);
 
     // Update black holes
     if (gameState.currentLevel.blackHoles) {
@@ -405,6 +414,8 @@ function render() {
     // Draw goal indicator (always on top, not affected by screen shake)
     if (gameState.gameStarted) {
         drawGoalIndicator(gameState.ctx);
+        drawMobileJoystick(gameState.ctx);
+        drawSpeedIndicator(gameState.ctx);
     }
 }
 
@@ -718,19 +729,12 @@ function handleInput(event) {
     const isKeyDown = event.type === 'keydown';
 
     // Prevent default behavior for game controls to avoid browser interference
-    if (event.code === 'Space' || event.code === 'ArrowLeft' || event.code === 'ArrowRight') {
+    if (event.code === 'ArrowLeft' || event.code === 'ArrowRight') {
         event.preventDefault();
     }
 
-    if (event.code === 'Space') {
-        if (isKeyDown) {
-            if (gameState.gameStarted && gameState.player.onPlanet && !gameState.player.hasJumped) {
-                // Jump from planet (only if haven't already jumped)
-                gameState.player.jump();
-                gameState.stats.totalJumps++;
-            }
-        }
-    } else if (event.code === 'ArrowLeft') {
+    // Handle keyboard input
+    if (event.code === 'ArrowLeft') {
         gameState.keys.left = isKeyDown;
     } else if (event.code === 'ArrowRight') {
         gameState.keys.right = isKeyDown;
@@ -755,6 +759,199 @@ function handleInput(event) {
             resumeGame();
         }
     }
+}
+
+// Update mobile input state
+function updateMobileInput() {
+    if (!gameState.mobileInput.active) {
+        // No mobile input active, clear mobile keys and target speed
+        gameState.mobileInput.left = false;
+        gameState.mobileInput.right = false;
+        gameState.mobileInput.targetSpeed = 0;
+        return;
+    }
+
+    // Calculate joystick position relative to center
+    const deltaX = gameState.mobileInput.currentX - gameState.mobileInput.centerX;
+    const distance = Math.abs(deltaX);
+
+    // Apply deadzone
+    if (distance < gameState.mobileInput.deadzone) {
+        // In deadzone - no movement, target speed = 0
+        gameState.mobileInput.left = false;
+        gameState.mobileInput.right = false;
+        gameState.mobileInput.targetSpeed = 0;
+    } else {
+        // Outside deadzone - calculate target speed based on drag distance
+        const clampedDistance = Math.min(distance, gameState.mobileInput.maxDistance);
+        const direction = deltaX > 0 ? 'right' : 'left';
+
+        // Calculate target speed as percentage of max speed (0-1)
+        gameState.mobileInput.targetSpeed = clampedDistance / gameState.mobileInput.maxDistance;
+
+        // Set mobile input based on direction
+        gameState.mobileInput.left = direction === 'left';
+        gameState.mobileInput.right = direction === 'right';
+    }
+}
+
+// Draw mobile joystick visual feedback - using overlay
+function drawMobileJoystick(ctx) {
+    if (!gameState.joystickOverlay) return;
+
+    if (!gameState.mobileInput.active) {
+        // Hide overlay when no input active
+        gameState.joystickOverlay.style.display = 'none';
+        return;
+    }
+
+    // Show overlay
+    gameState.joystickOverlay.style.display = 'block';
+
+    // Use different positioning strategy for mobile vs desktop
+    const isMobile = gameState.isMobile || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+    if (isMobile) {
+        // Mobile: Use fixed center position for reliability
+        // Mobile browsers are picky about absolute positioning with touch events
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+
+        // Center the overlay on screen (simple, reliable)
+        const overlayX = (viewportWidth - 200) / 2;
+        const overlayY = (viewportHeight - 200) / 2;
+
+        gameState.joystickOverlay.style.left = overlayX + 'px';
+        gameState.joystickOverlay.style.top = overlayY + 'px';
+        gameState.joystickOverlay.style.position = 'fixed';
+    } else {
+        // Desktop: Position relative to touch point
+        const screenX = gameState.mobileInput.centerX;
+        const screenY = gameState.mobileInput.centerY;
+
+        // Use viewport-relative positioning for better desktop support
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+
+        // Position joystick above the touch point with spacing
+        const joystickRadius = gameState.mobileInput.joystickRadius + 10;
+        let overlayX = Math.max(0, Math.min(screenX - 100, viewportWidth - 200)); // Center the 200px wide overlay on touch, clamp to viewport
+        let overlayY = screenY - joystickRadius * 2;
+
+        // If too high, position below touch point instead
+        if (overlayY < 10) {
+            overlayY = Math.max(0, screenY + joystickRadius * 2);
+        }
+
+        // Clamp to viewport bounds
+        overlayY = Math.max(0, Math.min(overlayY, viewportHeight - 200)); // 200px is overlay height
+
+        // Set overlay position using screen coordinates but clamped to viewport
+        gameState.joystickOverlay.style.left = overlayX + 'px';
+        gameState.joystickOverlay.style.top = overlayY + 'px';
+        gameState.joystickOverlay.style.position = 'fixed'; // Ensure fixed positioning
+    }
+
+    // Draw on overlay canvas
+    const overlayCtx = gameState.joystickCtx;
+
+    // Clear overlay
+    overlayCtx.clearRect(0, 0, 200, 200);
+
+    // Draw joystick at center of overlay
+    const centerX = 100;
+    const centerY = 100;
+
+    // Draw joystick base (outer circle)
+    const baseRadius = gameState.mobileInput.joystickRadius;
+    overlayCtx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    overlayCtx.lineWidth = 2;
+    overlayCtx.beginPath();
+    overlayCtx.arc(centerX, centerY, baseRadius, 0, 2 * Math.PI);
+    overlayCtx.stroke();
+
+    // Draw joystick handle (inner circle)
+    const deltaX = gameState.mobileInput.currentX - gameState.mobileInput.centerX;
+    const distance = Math.abs(deltaX);
+
+    if (distance > gameState.mobileInput.deadzone) {
+        const clampedDistance = Math.min(distance, gameState.mobileInput.maxDistance);
+        const direction = deltaX > 0 ? 1 : -1;
+        const handleX = centerX + direction * clampedDistance;
+
+        // Handle color based on direction
+        const alpha = Math.min(distance / gameState.mobileInput.maxDistance, 1);
+        overlayCtx.fillStyle = deltaX > 0 ?
+            `rgba(255, 100, 100, ${0.6 * alpha})` : // Red for right
+            `rgba(100, 100, 255, ${0.6 * alpha})`;  // Blue for left
+
+        overlayCtx.beginPath();
+        overlayCtx.arc(handleX, centerY, 20, 0, 2 * Math.PI);
+        overlayCtx.fill();
+
+        // Draw direction indicator text
+        overlayCtx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        overlayCtx.font = '14px monospace';
+        overlayCtx.textAlign = 'center';
+        overlayCtx.fillText(deltaX > 0 ? '→' : '←', handleX, centerY - 5);
+    } else {
+        // In deadzone - show neutral position
+        overlayCtx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+        overlayCtx.beginPath();
+        overlayCtx.arc(centerX, centerY, 15, 0, 2 * Math.PI);
+        overlayCtx.fill();
+
+        // Show "RELEASE TO JUMP" hint
+        overlayCtx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        overlayCtx.font = '12px monospace';
+        overlayCtx.textAlign = 'center';
+        overlayCtx.fillText('RELEASE', centerX, centerY + 25);
+        overlayCtx.fillText('TO JUMP', centerX, centerY + 40);
+    }
+}
+
+// Draw static speed indicator
+function drawSpeedIndicator(ctx) {
+    if (!gameState.player || !gameState.player.onPlanet) return;
+
+    ctx.save();
+
+    const barWidth = 200;
+    const barHeight = 10;
+    const x = (CANVAS_WIDTH - barWidth) / 2;
+    const y = CANVAS_HEIGHT - 30;
+
+    // Draw speed bar background
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillRect(x, y, barWidth, barHeight);
+
+    // Draw speed bar fill
+    const speedRatio = Math.abs(gameState.player.angularSpeed) / gameState.player.baseAngularSpeed;
+    const fillWidth = barWidth * speedRatio;
+    const escapeThreshold = gameState.player.escapeThreshold;
+
+    if (speedRatio < escapeThreshold) {
+        // Green when below escape velocity
+        ctx.fillStyle = `rgba(0, 255, 0, ${0.5 + speedRatio * 0.5})`;
+    } else {
+        // Yellow/Red when at or above escape velocity
+        const overRatio = (speedRatio - escapeThreshold) / (1 - escapeThreshold);
+        const r = 255;
+        const g = Math.floor(255 * (1 - overRatio));
+        ctx.fillStyle = `rgba(${r}, ${g}, 0, ${0.7 + speedRatio * 0.3})`;
+    }
+    ctx.fillRect(x, y, fillWidth, barHeight);
+
+    // Draw escape velocity marker
+    const escapeX = x + barWidth * escapeThreshold;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(escapeX, y - 3);
+    ctx.lineTo(escapeX, y + barHeight + 3);
+    ctx.stroke();
+
+    ctx.restore();
 }
 
 // Game loop with dynamic frame rate and delta time

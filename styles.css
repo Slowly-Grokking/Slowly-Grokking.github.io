@@ -37,6 +37,46 @@ h1 {
     margin-bottom: 10px;
     font-size: 18px;
     font-weight: bold;
+    flex-wrap: wrap;
+}
+
+/* Game buttons for mobile */
+#game-buttons {
+    display: none;
+    gap: 10px;
+    align-items: center;
+}
+
+.game-btn {
+    background: rgba(74, 144, 226, 0.8);
+    border: 2px solid #4a90e2;
+    border-radius: 8px;
+    color: white;
+    font-size: 16px;
+    font-weight: bold;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+}
+
+.game-btn:hover {
+    background: rgba(90, 160, 255, 0.9);
+    transform: scale(1.05);
+}
+
+.game-btn:active {
+    transform: scale(0.95);
+}
+
+.game-btn:focus {
+    outline: 2px solid #ffd700;
+    outline-offset: 2px;
 }
 
 #game-canvas {
@@ -442,6 +482,33 @@ h1 {
 
 /* Responsive Design */
 @media (max-width: 768px) {
+    body {
+        padding: 10px;
+    }
+
+    #game-container {
+        max-width: 100%;
+    }
+
+    h1 {
+        font-size: 2em;
+        margin-bottom: 15px;
+    }
+
+    #game-info {
+        font-size: 14px;
+        margin-bottom: 8px;
+    }
+
+    #game-canvas {
+        width: 100%;
+        height: auto;
+        max-width: 100vw;
+        max-height: 60vh;
+        aspect-ratio: 4/3;
+        border-width: 2px;
+    }
+
     .mode-grid {
         grid-template-columns: 1fr;
     }
@@ -456,9 +523,167 @@ h1 {
 
     .menu-panel {
         padding: 25px;
+        width: 95%;
+        max-width: none;
     }
 
     .menu-title {
         font-size: 2em;
     }
+
+    .menu-btn {
+        padding: 12px 24px;
+        font-size: 1em;
+        min-height: 44px; /* Touch-friendly minimum */
+    }
+
+    /* Mobile joystick area */
+    #game-canvas {
+        touch-action: none; /* Prevent scrolling when touching canvas */
+    }
+}
+
+@media (max-width: 480px) {
+    h1 {
+        font-size: 1.5em;
+    }
+
+    #game-info {
+        font-size: 12px;
+        flex-wrap: wrap;
+        gap: 5px;
+    }
+
+    #game-info > div {
+        flex: 1 1 auto;
+        min-width: 80px;
+    }
+
+    .menu-panel {
+        padding: 20px;
+    }
+
+    .menu-title {
+        font-size: 1.8em;
+    }
+
+    .menu-btn {
+        padding: 10px 20px;
+        font-size: 0.9em;
+    }
+}
+
+/* Landscape mode optimizations */
+@media (max-height: 500px) and (orientation: landscape) {
+    body {
+        padding: 5px;
+    }
+
+    h1 {
+        font-size: 1.8em;
+        margin-bottom: 10px;
+    }
+
+    #game-info {
+        font-size: 12px;
+        margin-bottom: 5px;
+    }
+
+    #game-canvas {
+        max-height: 75vh;
+        border-width: 1px;
+    }
+
+    .menu-panel {
+        padding: 15px;
+    }
+
+    .menu-title {
+        font-size: 1.8em;
+    }
+
+    .menu-btn {
+        padding: 8px 16px;
+        font-size: 0.9em;
+        min-height: 40px;
+    }
+}
+
+/* Full-screen input mode */
+body.fullscreen-input {
+    padding: 0;
+    overflow: hidden;
+}
+
+body.fullscreen-input #game-container {
+    max-width: 100vw;
+    padding: 0;
+}
+
+body.fullscreen-input #game-canvas {
+    border: none;
+    border-radius: 0;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+}
+
+/* Show buttons on mobile devices */
+@media (max-width: 768px), (pointer: coarse) {
+    #game-buttons {
+        display: flex;
+    }
+
+    /* Hide buttons in fullscreen mode on mobile */
+    body.fullscreen-input #game-buttons {
+        display: none;
+    }
+}
+
+/* Improve fullscreen layout */
+@media (display-mode: fullscreen), (max-width: 768px) and (orientation: landscape) {
+    #game-container {
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 10px;
+        box-sizing: border-box;
+    }
+
+    #game-info {
+        margin-bottom: 5px;
+        min-height: auto;
+    }
+
+    #game-canvas {
+        flex: 1;
+        max-height: calc(100vh - 120px); /* Adjust for info and status */
+        aspect-ratio: auto;
+    }
+
+    #game-status {
+        margin-top: 5px;
+        min-height: auto;
+    }
+}
+
+/* Joystick Overlay */
+#joystick-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 200px;
+    height: 200px;
+    pointer-events: none;
+    z-index: 2000;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+#joystick-canvas {
+    width: 100%;
+    height: 100%;
 }

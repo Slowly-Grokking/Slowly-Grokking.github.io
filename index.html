@@ -15,6 +15,10 @@
             <div id="level">Level: 1</div>
             <div id="timer">Time: 0:00.0</div>
             <div id="high-score">High Score: 0</div>
+            <div id="game-buttons">
+                <button id="fullscreen-btn" class="game-btn" title="Toggle Fullscreen">⛶</button>
+                <button id="menu-btn" class="game-btn" title="Menu">☰</button>
+            </div>
         </div>
         <canvas id="game-canvas" width="800" height="600"></canvas>
         <div id="game-status"></div>
@@ -181,7 +185,10 @@
                 <div class="howto-section">
                     <h3>Controls</h3>
                     <p>← → Arrow Keys: Move along planet surface</p>
-                    <p>SPACE: Jump from planet</p>
+                    <p>Hold both ← →: Slow down to stop</p>
+                    <p>Release all keys: Jump from planet</p>
+                    <p>Touch/Click & Drag: Full-screen joystick (anywhere on screen)</p>
+                    <p>Works in both portrait and landscape modes</p>
                     <p>R: Restart current level</p>
                     <p>ESC: Pause</p>
                 </div>
@@ -201,6 +208,11 @@
             </div>
             <button class="menu-btn secondary" onclick="hideHowToPlay()">Back</button>
         </div>
+    </div>
+
+    <!-- Joystick Overlay -->
+    <div id="joystick-overlay" style="display: none;">
+        <canvas id="joystick-canvas" width="200" height="200"></canvas>
     </div>
 
     <script src="constants.js"></script>

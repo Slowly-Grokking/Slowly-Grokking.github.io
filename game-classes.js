@@ -225,14 +225,14 @@ class Player {
 
         // Angular movement physics (running around planets)
         this.angularSpeed = 0; // Current angular velocity (radians/second)
+        this.targetAngularSpeed = 0; // Target angular velocity (0-1 multiplier of base speed)
         this.baseAngularSpeed = 6 * 2 * Math.PI; // Max: 6 rotations/second (37.7 rad/s)
 
-        // Physics calibration:
-        // - Takes 4 rotations (8π radians) to reach max speed
-        // - Takes 2 rotations (4π radians) to reach escape velocity
-        // Using θ = ω²/(2α), we get α = ω²/(16π)
-        this.angularAcceleration = Math.pow(this.baseAngularSpeed, 2) / (16 * Math.PI); // ≈28.27 rad/s²
-        this.angularDeceleration = this.angularAcceleration * 0.6; // ≈16.96 rad/s² (60% of accel)
+        // Physics calibration (reduced acceleration for better control):
+        // - Takes longer to reach max speed for more strategic gameplay
+        // - Using θ = ω²/(2α), we get α = ω²/(32π) for 50% slower acceleration
+        this.angularAcceleration = Math.pow(this.baseAngularSpeed, 2) / (32 * Math.PI); // ≈14.14 rad/s² (50% slower)
+        this.angularDeceleration = this.angularAcceleration * 0.8; // ≈11.31 rad/s² (80% of accel)
 
         // Escape velocity threshold: ratio of escape speed to max speed
         // Since escape is at 2 rotations and max at 4 rotations: ω_escape = ω_max / √2
@@ -249,26 +249,44 @@ class Player {
     updateAngularMovement(keys, dt) {
         // dt is already scaled by gameSpeed for time dilation
 
-        // Handle acceleration/deceleration based on input
-        if (keys.left) {
-            this.angularSpeed = Math.max(
-                this.angularSpeed - this.angularAcceleration * dt,
-                -this.baseAngularSpeed
-            );
+        // Calculate target speed based on input
+        let targetSpeed = 0;
+
+        if (keys.left && keys.right) {
+            // Both buttons held: target speed = 0 (braking)
+            targetSpeed = 0;
+        } else if (keys.left) {
+            // Left button: negative max speed
+            targetSpeed = -this.baseAngularSpeed;
         } else if (keys.right) {
-            this.angularSpeed = Math.min(
-                this.angularSpeed + this.angularAcceleration * dt,
-                this.baseAngularSpeed
-            );
+            // Right button: positive max speed
+            targetSpeed = this.baseAngularSpeed;
         } else {
-            // Decelerate when not pressing keys (friction)
-            const decel = this.angularDeceleration * dt;
-            if (Math.abs(this.angularSpeed) < decel) {
-                this.angularSpeed = 0; // Stop if very slow
-            } else {
-                this.angularSpeed -= Math.sign(this.angularSpeed) * decel;
-            }
+            // No buttons: target speed = 0
+            targetSpeed = 0;
         }
+
+        // Apply mobile input target speed (0-1 multiplier)
+        if (gameState.mobileInput && gameState.mobileInput.targetSpeed > 0) {
+            const mobileDirection = gameState.mobileInput.left ? -1 : 1;
+            targetSpeed = mobileDirection * this.baseAngularSpeed * gameState.mobileInput.targetSpeed;
+        }
+
+        // Smooth acceleration towards target speed
+        const speedDifference = targetSpeed - this.angularSpeed;
+        const maxAcceleration = this.angularAcceleration * dt;
+
+        if (Math.abs(speedDifference) < maxAcceleration) {
+            // Close enough to target, snap to it
+            this.angularSpeed = targetSpeed;
+        } else {
+            // Accelerate towards target
+            const accelerationDirection = Math.sign(speedDifference);
+            this.angularSpeed += accelerationDirection * maxAcceleration;
+        }
+
+        // Clamp to maximum speed
+        this.angularSpeed = Math.max(-this.baseAngularSpeed, Math.min(this.baseAngularSpeed, this.angularSpeed));
 
         // Update angle based on angular velocity
         this.angle += this.angularSpeed * dt;
@@ -474,46 +492,7 @@ class Player {
         ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
         ctx.fill();
 
-        // Draw speed indicator when on planet
-        if (this.onPlanet && this.currentPlanet) {
-            const speedRatio = Math.abs(this.angularSpeed) / this.baseAngularSpeed;
-            const escapeThreshold = this.escapeThreshold; // ≈70.7% of max speed (2 rotations)
-
-            // Position indicator near player
-            const indicatorAngle = this.angle + Math.PI / 2;
-            const indicatorDist = this.radius + 15;
-            const indicatorX = this.x + Math.cos(indicatorAngle) * indicatorDist;
-            const indicatorY = this.y + Math.sin(indicatorAngle) * indicatorDist;
-
-            // Draw speed bar background
-            const barWidth = 40;
-            const barHeight = 6;
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-            ctx.fillRect(indicatorX - barWidth / 2, indicatorY - barHeight / 2, barWidth, barHeight);
-
-            // Draw speed bar fill (changes color approaching escape velocity)
-            const fillWidth = barWidth * speedRatio;
-            if (speedRatio < escapeThreshold) {
-                // Green when below escape velocity
-                ctx.fillStyle = `rgba(0, 255, 0, ${0.5 + speedRatio * 0.5})`;
-            } else {
-                // Yellow/Red when at or above escape velocity
-                const overRatio = (speedRatio - escapeThreshold) / (1 - escapeThreshold);
-                const r = 255;
-                const g = Math.floor(255 * (1 - overRatio));
-                ctx.fillStyle = `rgba(${r}, ${g}, 0, ${0.7 + speedRatio * 0.3})`;
-            }
-            ctx.fillRect(indicatorX - barWidth / 2, indicatorY - barHeight / 2, fillWidth, barHeight);
-
-            // Draw escape velocity marker
-            const escapeX = indicatorX - barWidth / 2 + barWidth * escapeThreshold;
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(escapeX, indicatorY - barHeight / 2 - 3);
-            ctx.lineTo(escapeX, indicatorY + barHeight / 2 + 3);
-            ctx.stroke();
-        } else if (!this.onPlanet) {
+        if (!this.onPlanet) {
             // Draw velocity vector when in flight
             const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
             if (speed > 10) { // Only show if moving significantly

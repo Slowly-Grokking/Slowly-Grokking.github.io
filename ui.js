@@ -98,6 +98,19 @@ function showHowToPlay() {
     document.getElementById('howto-screen').classList.remove('hidden');
 }
 
+// Mobile menu function - shows pause menu or main menu based on game state
+function showMobileMenu() {
+    if (gameState.gameStarted) {
+        // In game - show pause menu
+        hideAllMenus();
+        document.getElementById('pause-menu').classList.remove('hidden');
+        gameState.paused = true;
+    } else {
+        // Not in game - show main menu (if hidden)
+        showMainMenu();
+    }
+}
+
 function hideHowToPlay() {
     showMainMenu();
 }
